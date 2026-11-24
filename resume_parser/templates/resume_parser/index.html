@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear-ATS — ATS Resume Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #f1f5f9;
+            --navy-dark: #0f172a;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --border-subtle: #e2e8f0;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--navy-dark);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .topbar {
+            background: var(--navy-dark);
+            padding: 1rem 0;
+        }
+        .main-card {
+            background: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 1.75rem;
+            text-align: center;
+            background: #f8fafc;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent);
+            background: #eff6ff;
+        }
+        .preset-chip {
+            font-size: 0.78rem;
+            border-radius: 999px;
+            padding: 0.3rem 0.75rem;
+        }
+        .btn-analyze {
+            background: var(--accent);
+            border: none;
+            border-radius: 10px;
+            padding: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            transition: background 0.2s ease, transform 0.1s ease;
+        }
+        .btn-analyze:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+        .history-item {
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 0.9rem 1rem;
+            margin-bottom: 0.75rem;
+            background: #ffffff;
+            transition: all 0.15s ease;
+        }
+        .history-item:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+        }
+        .score-badge {
+            font-weight: 700;
+            font-size: 0.88rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: 8px;
+            min-width: 66px;
+            text-align: center;
+        }
+        footer.disclaimer-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-subtle);
+            background: #ffffff;
+            padding: 1.25rem 0;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="topbar mb-4">
+    <div class="container d-flex justify-content-between align-items-center">
+        <a class="text-white text-decoration-none fw-bold fs-4" href="{% url 'index' %}">
+            Clear<span class="text-info">-ATS</span>
+        </a>
+        <a href="/admin/" class="btn btn-outline-light btn-sm px-3">Admin Panel</a>
+    </div>
+</nav>
+
+<main class="container pb-5">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm mb-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-4">
+        <!-- Left Column: Resume & JD Input Form -->
+        <div class="col-lg-7">
+            <div class="main-card p-4 p-md-5">
+                <h4 class="fw-bold mb-4">Analyze Resume</h4>
+
+                <form method="POST" enctype="multipart/form-data" id="analyzeForm">
+                    {% csrf_token %}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold small text-uppercase text-muted">Candidate Resume (PDF)</label>
+                        <div class="drop-zone" id="dropZone">
+                            <input type="file" name="resume_file" id="resumeInput" accept=".pdf" class="d-none" required>
+                            <div class="fw-semibold text-primary mb-1" id="fileLabel">Click to choose a PDF or drag &amp; drop here</div>
+                            <div class="text-muted small" id="fileSubLabel">Text-based PDF resumes supported (max 10 MB)</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <label class="form-label fw-semibold small text-uppercase text-muted mb-0">Job Description</label>
+                            <div class="d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-outline-secondary preset-chip" data-preset="python">Sample: Python Dev</button>
+                                <button type="button" class="btn btn-outline-secondary preset-chip" data-preset="fullstack">Sample: Full Stack</button>
+                                <button type="button" class="btn btn-outline-secondary preset-chip" data-preset="ml">Sample: ML / Data</button>
+                            </div>
+                        </div>
+                        <textarea name="job_description" id="jdTextarea" rows="8" class="form-control" placeholder="Paste the full job description here, or click a sample role above..." required></textarea>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted" id="jdWordCount">0 words</small>
+                            <small class="text-muted">Include required skills &amp; qualifications for best accuracy</small>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-analyze flex-grow-1 text-white" id="submitBtn">
+                            Analyze Resume &rarr;
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary px-3" id="resetBtn" style="border-radius: 10px;">
+                            Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Right Column: Searchable Audit History -->
+        <div class="col-lg-5">
+            <div class="main-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-uppercase small text-muted mb-0">Recent Audit Reports</h6>
+                    <span class="badge bg-light text-dark border">{{ recent_analyses|length }} saved</span>
+                </div>
+
+                {% if recent_analyses %}
+                    <input type="text" id="historySearch" class="form-control form-control-sm mb-3" placeholder="Filter saved reports...">
+
+                    <div id="historyList">
+                        {% for item in recent_analyses %}
+                            <div class="history-item d-flex justify-content-between align-items-center" data-title="{{ item.job_title|lower }}">
+                                <div class="me-2">
+                                    <a href="{% url 'analysis_detail' item.pk %}" class="fw-semibold text-decoration-none text-dark d-block">
+                                        {{ item.job_title }}
+                                    </a>
+                                    <small class="text-muted">{{ item.created_at|date:"M d, Y • H:i" }}</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <a href="{% url 'analysis_detail' item.pk %}" class="text-decoration-none score-badge {% if item.overall_score >= 75 %}bg-success-subtle text-success{% elif item.overall_score >= 50 %}bg-warning-subtle text-warning-emphasis{% else %}bg-danger-subtle text-danger{% endif %}">
+                                        {{ item.overall_score|floatformat:1 }}%
+                                    </a>
+                                    <form method="POST" action="{% url 'delete_analysis' item.pk %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-light text-danger border" title="Delete report">&times;</button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5 bg-light rounded-3">
+                        <p class="text-muted small mb-0">No reports yet. Upload a PDF resume on the left to begin.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer class="disclaimer-footer">
+    <div class="container text-center">
+        <p class="text-muted small mb-0">
+            <strong>Disclaimer:</strong> ResumeIQ produces an explainable ATS-style heuristic score based on skill, keyword, project, and education alignment. It is intended for educational and career preparation purposes and does not represent the proprietary screening algorithm of any specific employer or applicant tracking system.
+        </p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const dropZone = document.getElementById("dropZone");
+    const resumeInput = document.getElementById("resumeInput");
+    const fileLabel = document.getElementById("fileLabel");
+    const fileSubLabel = document.getElementById("fileSubLabel");
+    const jdTextarea = document.getElementById("jdTextarea");
+    const jdWordCount = document.getElementById("jdWordCount");
+    const analyzeForm = document.getElementById("analyzeForm");
+    const submitBtn = document.getElementById("submitBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const SAMPLE_JDS = {
+        python: `Junior Python / Django Developer\n\nRequired Skills:\n- Strong programming skills in Python, SQL, and REST API development\n- Hands-on experience with Django or Flask web frameworks\n- Familiarity with MySQL or PostgreSQL databases, HTML, CSS, JavaScript, and Git\n- Knowledge of Data Structures, Algorithms, and debugging\n\nPreferred Qualifications:\n- Bachelor's degree (B.Tech / B.E.) in Computer Science or IT\n- Good communication and teamwork skills`,
+        fullstack: `Full Stack Software Engineer\n\nRequired Skills:\n- Proficiency in JavaScript, TypeScript, React, Node.js, HTML, and CSS\n- Experience building REST APIs and working with PostgreSQL or MongoDB\n- Version control with Git and containerization basics with Docker\n\nPreferred Qualifications:\n- Experience with AWS or CI/CD pipelines\n- B.Tech / Bachelor's degree in Computer Science`,
+        ml: `Machine Learning & NLP Intern\n\nRequired Skills:\n- Strong foundation in Python, Machine Learning, Deep Learning, and NLP\n- Hands-on experience with Pandas, NumPy, Scikit-learn, and TensorFlow or PyTorch\n- Familiarity with SQL, Git, and REST APIs\n\nPreferred Qualifications:\n- Experience with spaCy or LLMs\n- B.Tech in Computer Science or Data Science`
+    };
+
+    function updateWordCount() {
+        const words = jdTextarea.value.trim().split(/\s+/).filter(Boolean).length;
+        jdWordCount.textContent = `${words} word${words === 1 ? "" : "s"}`;
+    }
+
+    jdTextarea.addEventListener("input", updateWordCount);
+
+    document.querySelectorAll(".preset-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const key = btn.getAttribute("data-preset");
+            jdTextarea.value = SAMPLE_JDS[key] || "";
+            updateWordCount();
+        });
+    });
+
+    dropZone.addEventListener("click", () => resumeInput.click());
+
+    resumeInput.addEventListener("change", () => {
+        if (resumeInput.files.length > 0) {
+            const f = resumeInput.files[0];
+            fileLabel.textContent = "Selected: " + f.name;
+            fileSubLabel.textContent = (f.size / 1024).toFixed(1) + " KB • Ready to analyze";
+            dropZone.classList.add("border-primary");
+        }
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+    dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length > 0) {
+            resumeInput.files = e.dataTransfer.files;
+            const f = e.dataTransfer.files[0];
+            fileLabel.textContent = "Selected: " + f.name;
+            fileSubLabel.textContent = (f.size / 1024).toFixed(1) + " KB • Ready to analyze";
+            dropZone.classList.add("border-primary");
+        }
+    });
+
+    resetBtn.addEventListener("click", () => {
+        analyzeForm.reset();
+        fileLabel.textContent = "Click to choose a PDF or drag & drop here";
+        fileSubLabel.textContent = "Text-based PDF resumes supported (max 10 MB)";
+        dropZone.classList.remove("border-primary");
+        updateWordCount();
+    });
+
+    analyzeForm.addEventListener("submit", () => {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Analyzing Resume...";
+    });
+
+    const historySearch = document.getElementById("historySearch");
+    if (historySearch) {
+        historySearch.addEventListener("input", () => {
+            const q = historySearch.value.toLowerCase();
+            document.querySelectorAll("#historyList .history-item").forEach((item) => {
+                const title = item.getAttribute("data-title") || "";
+                item.style.display = title.includes(q) ? "flex" : "none";
+            });
+        });
+    }
+</script>
+</body>
+</html>
